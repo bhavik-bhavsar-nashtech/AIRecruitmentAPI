@@ -1,0 +1,1 @@
+# AIRecruitmentAPI MIT License
