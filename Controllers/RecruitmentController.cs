@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using AIRecruitmentAPI.Models;
 using AIRecruitmentAPI.Services;
 
@@ -42,13 +42,36 @@ public class RecruitmentController : ControllerBase
         }
     }
 
+
+    // ✅ UPDATED METHOD (supports txt, pdf, docx)
     [HttpPost("upload-resume")]
     public async Task<IActionResult> UploadResume(IFormFile resume, string jobDescription, string name)
     {
         try
         {
-            using var reader = new StreamReader(resume.OpenReadStream());
-            var resumeText = await reader.ReadToEndAsync();
+            if (resume == null || resume.Length == 0)
+                return BadRequest("No file uploaded.");
+
+            // ✅ Validate extension
+            var allowedExtensions = new[] { ".txt", ".pdf", ".docx" };
+            var extension = Path.GetExtension(resume.FileName).ToLower();
+
+            if (!allowedExtensions.Contains(extension))
+                return BadRequest("Only txt, pdf, docx files are allowed.");
+
+            // ✅ Optional size limit (5MB)
+            if (resume.Length > 5 * 1024 * 1024)
+                return BadRequest("File too large. Max 5MB allowed.");
+
+            string resumeText;
+
+            using (var stream = resume.OpenReadStream())
+            {
+                resumeText = await _aiService.ExtractTextFromFile(stream, extension);
+            }
+
+            if (string.IsNullOrWhiteSpace(resumeText))
+                return BadRequest("Could not extract text from file.");
 
             var screening = await _aiService.ScreenResume(resumeText, jobDescription);
 

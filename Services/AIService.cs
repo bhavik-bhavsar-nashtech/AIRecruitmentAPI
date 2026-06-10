@@ -1,5 +1,7 @@
+﻿using DocumentFormat.OpenXml.Packaging;
 using System.Text;
 using System.Text.Json;
+using UglyToad.PdfPig;
 
 namespace AIRecruitmentAPI.Services;
 
@@ -61,6 +63,58 @@ Evaluate the candidate and provide:
 - Final decision (Shortlisted / Rejected)";
 
         return await CallOpenAI("You are a smart recruitment assistant.", prompt);
+    }
+
+
+    // ✅ ✅ NEW: FILE TEXT EXTRACTION LOGIC
+    public async Task<string> ExtractTextFromFile(Stream fileStream, string extension)
+    {
+        extension = extension.ToLower();
+
+        // ✅ TXT
+        if (extension == ".txt")
+        {
+            using var reader = new StreamReader(fileStream);
+            return await reader.ReadToEndAsync();
+        }
+        // ✅ PDF (PdfPig 0.1.14 safe implementation)
+        else if (extension == ".pdf")
+        {
+            var text = new StringBuilder();
+
+            using (var ms = new MemoryStream())
+            {
+                await fileStream.CopyToAsync(ms);
+                ms.Position = 0;
+
+                using (var pdf = PdfDocument.Open(ms))
+                {
+                    foreach (var page in pdf.GetPages())
+                    {
+                        text.AppendLine(page.Text);
+                    }
+                }
+            }
+
+            return text.ToString();
+        }
+        // ✅ DOCX
+        else if (extension == ".docx")
+        {
+            using (var ms = new MemoryStream())
+            {
+                await fileStream.CopyToAsync(ms);
+                ms.Position = 0;
+
+                using (var doc = WordprocessingDocument.Open(ms, false))
+                {
+                    var body = doc.MainDocumentPart.Document.Body;
+                    return body.InnerText;
+                }
+            }
+        }
+
+        return string.Empty;
     }
 
     public async Task<string> GenerateOffer(string candidateName)
