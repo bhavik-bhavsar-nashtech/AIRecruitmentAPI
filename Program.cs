@@ -3,6 +3,19 @@ using AIRecruitmentAPI.Services;
 using AIRecruitmentAPI.Providers;
 
 var builder = WebApplication.CreateBuilder(args);
+// ✅ Add this
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+        policy =>
+        {
+            policy
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowAnyOrigin();
+        });
+});
+
 
 // ✅ Add Controllers
 builder.Services.AddControllers();
@@ -30,6 +43,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseCors("AllowReactApp");
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
