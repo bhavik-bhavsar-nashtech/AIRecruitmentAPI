@@ -1,5 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using AIRecruitmentAPI.Core;
+﻿using AIRecruitmentAPI.Core;
+using AIRecruitmentAPI.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AIRecruitmentAPI.Controllers;
 
@@ -55,6 +56,19 @@ public class RecruitmentController : ControllerBase
             result
         });
     }
+
+
+    [HttpPost("upload-resume-text")]
+    public async Task<IActionResult> UploadResumeText([FromBody] ResumeRequest req)
+    {
+        var result = await _aiService.ScreenResume(req.ResumeText, req.JobDescription);
+
+        return Ok(new
+        {
+            candidate = req.Name,
+            result
+        });
+    }
 }
 
 // ✅ Request model
@@ -62,4 +76,13 @@ public class RequestModel
 {
     public string Resume { get; set; }
     public string JobDescription { get; set; }
+}
+
+
+
+public class ResumeRequest
+{
+    public string Name { get; set; }
+    public string JobDescription { get; set; }
+    public string ResumeText { get; set; }
 }

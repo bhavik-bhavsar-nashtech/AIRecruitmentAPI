@@ -15,7 +15,8 @@ public class OpenAICompatibleProvider:IModelProvider
         var body = new
         {
             model = _config["AI:Model"],
-            input = prompt
+            input = prompt,
+            temperature = 0
         };
 
         _http.DefaultRequestHeaders.Clear();
