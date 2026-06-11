@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using AIRecruitmentAPI.Models;
-using AIRecruitmentAPI.Services;
+using AIRecruitmentAPI.Core;
 
 namespace AIRecruitmentAPI.Controllers;
 
@@ -9,99 +8,58 @@ namespace AIRecruitmentAPI.Controllers;
 public class RecruitmentController : ControllerBase
 {
     private readonly IAIService _aiService;
+    private readonly IFileService _fileService;
 
-    public RecruitmentController(IAIService aiService)
+    public RecruitmentController(IAIService aiService, IFileService fileService)
     {
         _aiService = aiService;
+        _fileService = fileService;
     }
 
+    // ✅ JSON-based API (existing)
     [HttpPost("recruit")]
-    public async Task<IActionResult> Recruit([FromBody] RecruitRequest request)
+    public async Task<IActionResult> Evaluate([FromBody] RequestModel req)
     {
-        try
-        {
-            var screening = await _aiService.ScreenResume(request.Resume, request.JobDescription);
-
-            var response = new Dictionary<string, object>
-            {
-                ["name"] = request.Name,
-                ["screening"] = screening
-            };
-
-            if (screening.ToLower().Contains("shortlisted"))
-            {
-                response["interview"] = ScheduleInterview(request.Name);
-                response["offer"] = await _aiService.GenerateOffer(request.Name);
-            }
-
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { error = ex.Message });
-        }
+        var result = await _aiService.ScreenResume(req.Resume, req.JobDescription);
+        return Ok(result);
     }
 
-
-    // ✅ UPDATED METHOD (supports txt, pdf, docx)
+    // ✅ ✅ FILE UPLOAD API (NEW - Swagger will show this)
     [HttpPost("upload-resume")]
-    public async Task<IActionResult> UploadResume(IFormFile resume, string jobDescription, string name)
+    public async Task<IActionResult> UploadResume(
+        IFormFile resume,
+        string jobDescription,
+        string name)
     {
-        try
+        if (resume == null || resume.Length == 0)
+            return BadRequest("No file uploaded");
+
+        var extension = Path.GetExtension(resume.FileName).ToLower();
+
+        var allowed = new[] { ".txt", ".pdf", ".docx" };
+        if (!allowed.Contains(extension))
+            return BadRequest("Only txt, pdf, docx allowed");
+
+        string resumeText;
+
+        using (var stream = resume.OpenReadStream())
         {
-            if (resume == null || resume.Length == 0)
-                return BadRequest("No file uploaded.");
-
-            // ✅ Validate extension
-            var allowedExtensions = new[] { ".txt", ".pdf", ".docx" };
-            var extension = Path.GetExtension(resume.FileName).ToLower();
-
-            if (!allowedExtensions.Contains(extension))
-                return BadRequest("Only txt, pdf, docx files are allowed.");
-
-            // ✅ Optional size limit (5MB)
-            if (resume.Length > 5 * 1024 * 1024)
-                return BadRequest("File too large. Max 5MB allowed.");
-
-            string resumeText;
-
-            using (var stream = resume.OpenReadStream())
-            {
-                resumeText = await _aiService.ExtractTextFromFile(stream, extension);
-            }
-
-            if (string.IsNullOrWhiteSpace(resumeText))
-                return BadRequest("Could not extract text from file.");
-
-            var screening = await _aiService.ScreenResume(resumeText, jobDescription);
-
-            var response = new Dictionary<string, object>
-            {
-                ["name"] = name,
-                ["screening"] = screening
-            };
-
-            if (screening.ToLower().Contains("shortlisted"))
-            {
-                response["interview"] = ScheduleInterview(name);
-                response["offer"] = await _aiService.GenerateOffer(name);
-            }
-
-            return Ok(response);
+            resumeText = await _fileService.ExtractText(stream, extension);
         }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { error = ex.Message });
-        }
-    }
 
-    private object ScheduleInterview(string candidateName)
-    {
-        return new
+        var result = await _aiService.ScreenResume(resumeText, jobDescription);
+
+        return Ok(new
         {
-            candidate = candidateName,
-            date = "2026-06-01",
-            time = "10:00 AM"
-        };
+            candidate = name,
+            result
+        });
     }
+}
+
+// ✅ Request model
+public class RequestModel
+{
+    public string Resume { get; set; }
+    public string JobDescription { get; set; }
 }

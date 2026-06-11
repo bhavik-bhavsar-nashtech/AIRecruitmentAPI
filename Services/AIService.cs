@@ -1,130 +1,63 @@
-﻿using DocumentFormat.OpenXml.Packaging;
-using System.Text;
+﻿
 using System.Text.Json;
-using UglyToad.PdfPig;
+using AIRecruitmentAPI.Core;
 
 namespace AIRecruitmentAPI.Services;
-
 public class AIService : IAIService
 {
-    private readonly IConfiguration _config;
-    private readonly HttpClient _httpClient;
+    private readonly IModelProvider _provider;
+    public AIService(IModelProvider provider){_provider=provider;}
 
-    public AIService(IConfiguration config)
+    public async Task<ScreeningResult> ScreenResume(string resume,string jd)
     {
-        _config = config;
-        _httpClient = new HttpClient();
-    }
+        var prompt = $@"Return JSON only:
+        {{
+          ""Score"": number,
+          ""Summary"": string,
+          ""Decision"": ""Shortlisted"" or ""Rejected""
+        }}
+        JD: {jd}
+        Resume: {resume}";
 
-    private async Task<string> CallOpenAI(string systemPrompt, string userPrompt)
-    {
-        var endpoint = $"{_config["AzureOpenAI:Endpoint"]}openai/deployments/{_config["AzureOpenAI:Model"]}/chat/completions?api-version=2025-01-01-preview";
+        var aiResponse = await _provider.GenerateText(prompt);
 
-        _httpClient.DefaultRequestHeaders.Clear();
-        _httpClient.DefaultRequestHeaders.Add("api-key", _config["AzureOpenAI:ApiKey"]);
+        var cleanJson = ExtractJson(aiResponse);
 
-        var body = new
+        var options = new JsonSerializerOptions
         {
-            messages = new[]
-            {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = userPrompt }
-            }
+            PropertyNameCaseInsensitive = true
         };
 
-        var response = await _httpClient.PostAsync(
-            endpoint,
-            new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
-        );
-
-        var json = await response.Content.ReadAsStringAsync();
-
-        var doc = JsonDocument.Parse(json);
-        return doc.RootElement
-                  .GetProperty("choices")[0]
-                  .GetProperty("message")
-                  .GetProperty("content")
-                  .GetString() ?? string.Empty;
+        try
+        {
+            var result = JsonSerializer.Deserialize<ScreeningResult>(cleanJson, options);
+            return result!;
+        }
+        catch
+        {
+            return new ScreeningResult{Score=0,Summary="Parsing failed",Decision="Rejected"};
+        }
     }
 
-    public async Task<string> ScreenResume(string resume, string jobDescription)
+    string ExtractJson(string input)
     {
-        var prompt = $@"You are an expert recruiter.
+        if (string.IsNullOrWhiteSpace(input))
+            return input;
 
-Job Description:
-{jobDescription}
+        // ✅ Remove markdown code block if present
+        input = input.Replace("```json", "")
+                     .Replace("```", "")
+                     .Trim();
 
-Candidate Resume:
-{resume}
+        // ✅ Extract only JSON part
+        var start = input.IndexOf("{");
+        var end = input.LastIndexOf("}");
 
-Evaluate the candidate and provide:
-- Score (0-100)
-- Short summary (2-3 lines)
-- Final decision (Shortlisted / Rejected)";
-
-        return await CallOpenAI("You are a smart recruitment assistant.", prompt);
-    }
-
-
-    // ✅ ✅ NEW: FILE TEXT EXTRACTION LOGIC
-    public async Task<string> ExtractTextFromFile(Stream fileStream, string extension)
-    {
-        extension = extension.ToLower();
-
-        // ✅ TXT
-        if (extension == ".txt")
+        if (start >= 0 && end > start)
         {
-            using var reader = new StreamReader(fileStream);
-            return await reader.ReadToEndAsync();
-        }
-        // ✅ PDF (PdfPig 0.1.14 safe implementation)
-        else if (extension == ".pdf")
-        {
-            var text = new StringBuilder();
-
-            using (var ms = new MemoryStream())
-            {
-                await fileStream.CopyToAsync(ms);
-                ms.Position = 0;
-
-                using (var pdf = PdfDocument.Open(ms))
-                {
-                    foreach (var page in pdf.GetPages())
-                    {
-                        text.AppendLine(page.Text);
-                    }
-                }
-            }
-
-            return text.ToString();
-        }
-        // ✅ DOCX
-        else if (extension == ".docx")
-        {
-            using (var ms = new MemoryStream())
-            {
-                await fileStream.CopyToAsync(ms);
-                ms.Position = 0;
-
-                using (var doc = WordprocessingDocument.Open(ms, false))
-                {
-                    var body = doc.MainDocumentPart.Document.Body;
-                    return body.InnerText;
-                }
-            }
+            return input.Substring(start, end - start + 1);
         }
 
-        return string.Empty;
-    }
-
-    public async Task<string> GenerateOffer(string candidateName)
-    {
-        var prompt = $@"Generate a professional job offer letter for:
-Candidate Name: {candidateName}
-Role: Software Engineer
-Salary: 10 LPA
-Keep it formal and concise.";
-
-        return await CallOpenAI("You are an HR assistant.", prompt);
+        return input;
     }
 }

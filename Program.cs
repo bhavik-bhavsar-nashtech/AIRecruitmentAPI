@@ -1,25 +1,38 @@
+﻿using AIRecruitmentAPI.Core;
 using AIRecruitmentAPI.Services;
+using AIRecruitmentAPI.Providers;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ✅ Add Controllers
 builder.Services.AddControllers();
+
+// ✅ Add Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddScoped<IAIService, AIService>();
+// ✅ Provider selection
+var provider = builder.Configuration["Provider"];
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll",
-        b => b.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
-});
+if (provider == "Ollama")
+    builder.Services.AddScoped<IModelProvider, OllamaProvider>();
+else
+    builder.Services.AddScoped<IModelProvider, OpenAICompatibleProvider>();
+
+builder.Services.AddScoped<IAIService, AIService>();
+builder.Services.AddScoped<IFileService, FileService>();
 
 var app = builder.Build();
 
-app.UseCors("AllowAll");
+// ✅ Enable Swagger
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseHttpsRedirection();
+app.UseAuthorization();
 
 app.MapControllers();
 
