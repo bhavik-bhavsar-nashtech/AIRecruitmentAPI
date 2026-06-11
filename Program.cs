@@ -16,7 +16,6 @@ builder.Services.AddCors(options =>
         });
 });
 
-
 // ✅ Add Controllers
 builder.Services.AddControllers();
 
@@ -28,9 +27,14 @@ builder.Services.AddSwaggerGen();
 var provider = builder.Configuration["Provider"];
 
 if (provider == "Ollama")
+{
+    builder.Services.AddHttpClient<OllamaProvider>();
     builder.Services.AddScoped<IModelProvider, OllamaProvider>();
+}
 else
+{
     builder.Services.AddScoped<IModelProvider, OpenAICompatibleProvider>();
+}
 
 builder.Services.AddScoped<IAIService, AIService>();
 builder.Services.AddScoped<IFileService, FileService>();
