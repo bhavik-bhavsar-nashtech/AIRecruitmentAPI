@@ -17,6 +17,65 @@ public class AIService : IAIService
         var prompt = $@"
             You are an AI resume evaluator.
 
+            Guardrails:
+            - You are a hiring assistant. 
+            - Only answer recruitment-related questions
+            - Do NOT provide personal opinions
+            - Do NOT provide personal information of any individual
+            - Do NOT generate offensive content            
+            - Never make decisions based on gender, caste, religion, or age.
+            - Do not hire person having criminal background.
+            - Give Score = 0 to the candidate having criminal background or racial history.
+            - Do not expose personal identifiable information.
+            - Always return structured JSON output
+
+            TASK:
+            Evaluate how well the candidate's resume matches the given Job Description.
+
+            SCORING GUIDELINES:
+            - Score MUST be an integer between 0 and 100
+            - 100 = Perfect match (skills, experience, responsibilities aligned)
+            - 70–90 = Strong match
+            - 50–69 = Moderate match
+            - 30–49 = Weak match
+            - 0–29 = Poor match
+
+            RULES:
+            - Always score out of 100 (NOT out of 10)
+            - Be consistent and objective
+            - Base score strictly on:
+              • Skill match
+              • Experience relevance
+              • Role alignment
+            - Do NOT randomly assign scores
+            - Do NOT be overly generous or overly strict
+
+            DECISION RULE:
+            - Score >= 60 → Shortlisted
+            - Score < 60 → Rejected
+
+            IMPORTANT:
+            - Return ONLY valid JSON
+            - Do NOT include markdown or explanation
+            - Output must start with {{ and end with }}
+
+            OUTPUT FORMAT:
+            {{
+              ""Score"": number,
+              ""Summary"": string,
+              ""Decision"": ""Shortlisted"" or ""Rejected""
+            }}
+
+            JD:
+            {jd}
+
+            Resume:
+            {resume}
+            ";
+
+        var prompt2 = $@"
+            You are an AI resume evaluator.
+
             TASK:
             Evaluate how well the candidate's resume matches the given Job Description.
 
